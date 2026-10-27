@@ -328,16 +328,17 @@ body:not(.no-tabs) #rest { bottom: calc(var(--safe-bottom) + 76px); }
 
 #toast {
   position: fixed; z-index: 40; left: 50%; top: calc(max(var(--safe-top), 50px) + 10px);
-  transform: translate(-50%, -150%);
+  transform: translate(-50%, -16px);
+  opacity: 0; visibility: hidden; /* oculto del todo cuando no hay mensaje */
   max-width: calc(100% - 32px); width: max-content;
   background: var(--text); color: var(--bg);
   padding: 12px 18px; border-radius: 14px;
   font-weight: 700; font-size: 15px; text-align: center;
   box-shadow: 0 10px 30px rgba(0, 0, 0, .4);
-  transition: transform .3s cubic-bezier(.2, .9, .3, 1);
+  transition: transform .3s cubic-bezier(.2, .9, .3, 1), opacity .25s ease, visibility .3s;
   pointer-events: none;
 }
-#toast.show { transform: translate(-50%, 0); }
+#toast.show { transform: translate(-50%, 0); opacity: 1; visibility: visible; }
 
 /* ---------- v1.1: gimnasio, accesos rápidos, cardio, discos ---------- */
 
