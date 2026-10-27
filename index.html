@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>GymLog</title>
+  <meta name="description" content="Registra tus entrenamientos, planifica rutinas y sigue tu progreso en el gimnasio.">
+
+  <!-- Aspecto de app en iPhone / Android -->
+  <meta name="theme-color" content="#0d0e10">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GymLog">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <main id="app"></main>
+
+  <!-- Barra inferior de pestañas -->
+  <nav id="tabbar" aria-label="Navegación principal">
+    <a href="#/inicio" data-tab="inicio">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/></svg>
+      Inicio
+    </a>
+    <a href="#/rutinas" data-tab="rutinas">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11"/></svg>
+      Rutinas
+    </a>
+    <a href="#/historial" data-tab="historial">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg>
+      Historial
+    </a>
+    <a href="#/progreso" data-tab="progreso">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
+      Progreso
+    </a>
+    <a href="#/cuerpo" data-tab="cuerpo">
+      <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2.5"/><path d="M5 9l7 1.5L19 9M12 10.5V15M9 22l3-7 3 7"/></svg>
+      Cuerpo
+    </a>
+  </nav>
+
+  <!-- Temporizador de descanso -->
+  <div id="rest" hidden>
+    <div class="rest-bar"><i></i></div>
+    <div class="rest-row">
+      <button class="btn sm" data-action="rest-add" data-sec="-15">−15 s</button>
+      <div class="rest-time"><small>Descanso</small><strong id="rest-time">0:00</strong></div>
+      <button class="btn sm" data-action="rest-add" data-sec="15">+15 s</button>
+      <button class="btn sm primary" data-action="rest-skip">Saltar</button>
+    </div>
+  </div>
+
+  <div id="overlay" hidden></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
