@@ -327,7 +327,7 @@ body:not(.no-tabs) #rest { bottom: calc(var(--safe-bottom) + 76px); }
 /* ---------- Aviso ---------- */
 
 #toast {
-  position: fixed; z-index: 40; left: 50%; top: calc(var(--safe-top) + 12px);
+  position: fixed; z-index: 40; left: 50%; top: calc(max(var(--safe-top), 50px) + 10px);
   transform: translate(-50%, -150%);
   max-width: calc(100% - 32px); width: max-content;
   background: var(--text); color: var(--bg);

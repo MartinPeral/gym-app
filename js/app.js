@@ -1355,6 +1355,7 @@ function openOverlay(html, mode) {
 }
 
 function closeOverlay() {
+  document.activeElement?.blur(); // cierra el teclado antes de quitar la ventana
   overlay.hidden = true;
   overlay.innerHTML = '';
   overlay.className = '';
