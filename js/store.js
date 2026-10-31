@@ -349,6 +349,7 @@ export function streak() {
 
 const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 export { dayKey, startOfWeek };
+export const startOfDay = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
 
 /** Minutos entrenados por día: Map 'AAAA-M-D' → minutos */
 export function dailyMinutes() {

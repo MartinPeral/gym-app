@@ -2,6 +2,15 @@
 
 App web instalable (PWA) para el gimnasio: rutinas, registro de entrenamientos con temporizador de descanso, historial y gráficas de progreso. Funciona sin conexión y los datos se guardan en el propio móvil.
 
+## Novedades de la versión 1.6 (rediseño interactivo)
+
+- **Animaciones:** las pantallas entran de forma escalonada, los números cuentan hasta su valor y la barra de pestañas tiene un indicador que se desliza.
+- **Carrusel de rutinas** en Inicio: tarjetas grandes del color de cada rutina, con sus ejercicios, duración estimada y cuándo la hiciste por última vez.
+- **Entreno más claro:** el ejercicio actual se marca con «Ahora», los terminados se pliegan solos y la pantalla baja al siguiente.
+- **Desliza una serie a la izquierda** para borrarla.
+- **Descanso en anillo:** toca el temporizador para verlo a pantalla completa, con la siguiente serie que te toca.
+- **Gráficas interactivas:** toca y desliza sobre ellas para ver la fecha y el valor de cada punto.
+
 ## Novedades de la versión 1.5 (Entrenador IA)
 
 - **Chat con un entrenador IA** (botón ✨ en Inicio): responde usando tus entrenos, marcas, peso, rutinas y músculos trabajados.

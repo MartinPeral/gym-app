@@ -58,18 +58,106 @@ function roundedTopRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+const FONT = '-apple-system, BlinkMacSystemFont, system-ui, sans-serif';
+const fmtDay = (t) => new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short' }).format(t);
+const fmtNum = (v, d = 1) => v.toLocaleString('es-ES', { maximumFractionDigits: d });
+
+/**
+ * Hace una gráfica "explorable": al tocar y arrastrar, resalta el punto
+ * más cercano. xs son las posiciones X (px) de cada punto y redraw(i)
+ * vuelve a dibujar resaltando el punto i (o ninguno si i es null).
+ */
+function bindScrub(canvas, xs, redraw) {
+  canvas._scrub = { xs, redraw };
+  if (canvas._bound) return;
+  canvas._bound = true;
+  canvas.style.touchAction = 'pan-y';
+  canvas.style.cursor = 'crosshair';
+  let timer;
+  const pick = (e) => {
+    const s = canvas._scrub;
+    if (!s?.xs.length) return;
+    const x = e.clientX - canvas.getBoundingClientRect().left;
+    let best = 0;
+    s.xs.forEach((v, i) => { if (Math.abs(v - x) < Math.abs(s.xs[best] - x)) best = i; });
+    if (best !== canvas._hl) {
+      canvas._hl = best;
+      s.redraw(best);
+    }
+  };
+  const release = () => {
+    canvas._active = false;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (canvas._hl == null) return;
+      canvas._hl = null;
+      canvas._scrub.redraw(null);
+    }, 2500);
+  };
+  canvas.addEventListener('pointerdown', (e) => { clearTimeout(timer); canvas._active = true; pick(e); });
+  canvas.addEventListener('pointermove', (e) => { if (canvas._active || e.pointerType === 'mouse') pick(e); });
+  canvas.addEventListener('pointerup', release);
+  canvas.addEventListener('pointercancel', release);
+  canvas.addEventListener('pointerleave', release);
+}
+
+/** Etiqueta flotante con una o dos líneas, encima de (x, y) */
+function tooltip(ctx, x, y, w, pad, main, sub) {
+  ctx.font = `700 12px ${FONT}`;
+  const mw = ctx.measureText(main).width;
+  ctx.font = `600 10.5px ${FONT}`;
+  const sw = sub ? ctx.measureText(sub).width : 0;
+  const tw = Math.max(mw, sw) + 16;
+  const th = sub ? 34 : 20;
+  const lx = Math.min(Math.max(x - tw / 2, pad.l), w - pad.r - tw);
+  const ly = Math.max(y - th - 10, 2);
+  ctx.fillStyle = cssVar('--accent');
+  ctx.beginPath();
+  ctx.roundRect ? ctx.roundRect(lx, ly, tw, th, 7) : ctx.rect(lx, ly, tw, th);
+  ctx.fill();
+  ctx.fillStyle = cssVar('--accent-ink');
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (sub) {
+    ctx.font = `600 10.5px ${FONT}`;
+    ctx.globalAlpha = 0.7;
+    ctx.fillText(sub, lx + tw / 2, ly + 10);
+    ctx.globalAlpha = 1;
+    ctx.font = `700 12px ${FONT}`;
+    ctx.fillText(main, lx + tw / 2, ly + 24);
+  } else {
+    ctx.font = `700 12px ${FONT}`;
+    ctx.fillText(main, lx + tw / 2, ly + 10.5);
+  }
+  ctx.font = `600 11px ${FONT}`;
+}
+
+/** Línea vertical guía en el punto resaltado */
+function guide(ctx, x, top, bottom) {
+  ctx.save();
+  ctx.strokeStyle = rgba('#f3f4f6', 0.35);
+  ctx.setLineDash([3, 4]);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(Math.round(x) + 0.5, top);
+  ctx.lineTo(Math.round(x) + 0.5, bottom);
+  ctx.stroke();
+  ctx.restore();
+}
+
 /**
  * Gráfica de línea.
  * points: [{ t: timestamp, y: número }]
  */
-export function lineChart(canvas, points, { unit = '' } = {}) {
+export function lineChart(canvas, points, opts = {}) {
+  const { unit = '', hl = null } = opts;
   const { ctx, w, h } = setup(canvas, 210);
   const accent = cssVar('--accent');
   const muted = cssVar('--muted');
   const grid = cssVar('--line');
   const bg = cssVar('--surface');
 
-  const pad = { l: 42, r: 16, t: 26, b: 26 };
+  const pad = { l: 42, r: 16, t: 40, b: 26 };
   const cw = w - pad.l - pad.r;
   const ch = h - pad.t - pad.b;
 
@@ -103,15 +191,13 @@ export function lineChart(canvas, points, { unit = '' } = {}) {
   }
 
   // Eje X: primera, intermedia y última fecha
-  const fmt = (t) =>
-    new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short' }).format(t);
   ctx.textBaseline = 'alphabetic';
   const labels = points.length === 1 ? [0] : points.length > 4
     ? [0, Math.floor((points.length - 1) / 2), points.length - 1]
     : [0, points.length - 1];
   labels.forEach((i, k) => {
     ctx.textAlign = points.length === 1 ? 'center' : k === 0 ? 'left' : k === labels.length - 1 ? 'right' : 'center';
-    ctx.fillText(fmt(points[i].t), X(i), h - 6);
+    ctx.fillText(fmtDay(points[i].t), X(i), h - 6);
   });
 
   // Área degradada
@@ -126,6 +212,8 @@ export function lineChart(canvas, points, { unit = '' } = {}) {
   ctx.fillStyle = grad;
   ctx.fill();
 
+  if (hl != null) guide(ctx, X(hl), pad.t - 6, pad.t + ch);
+
   // Línea
   ctx.beginPath();
   points.forEach((p, i) => (i ? ctx.lineTo(X(i), Y(p.y)) : ctx.moveTo(X(i), Y(p.y))));
@@ -136,39 +224,32 @@ export function lineChart(canvas, points, { unit = '' } = {}) {
   ctx.stroke();
 
   // Puntos
+  const focus = hl ?? points.length - 1;
   points.forEach((p, i) => {
-    const last = i === points.length - 1;
+    const on = i === focus;
     ctx.beginPath();
-    ctx.arc(X(i), Y(p.y), last ? 5 : 3, 0, Math.PI * 2);
-    ctx.fillStyle = last ? accent : bg;
+    ctx.arc(X(i), Y(p.y), on ? (hl != null ? 6 : 5) : 3, 0, Math.PI * 2);
+    ctx.fillStyle = on ? accent : bg;
     ctx.fill();
-    ctx.strokeStyle = accent;
+    ctx.strokeStyle = on && hl != null ? bg : accent;
     ctx.lineWidth = 2;
     ctx.stroke();
   });
 
-  // Etiqueta del último valor
-  const lp = points[points.length - 1];
-  const text = short(Math.round(lp.y * 10) / 10) + (unit ? ' ' + unit : '');
-  ctx.font = '700 12px -apple-system, BlinkMacSystemFont, system-ui, sans-serif';
-  const tw = ctx.measureText(text).width + 12;
-  const lx = Math.min(Math.max(X(points.length - 1) - tw / 2, pad.l), w - pad.r - tw);
-  const ly = Math.max(Y(lp.y) - 28, 2);
-  ctx.fillStyle = accent;
-  ctx.beginPath();
-  ctx.roundRect ? ctx.roundRect(lx, ly, tw, 20, 6) : ctx.rect(lx, ly, tw, 20);
-  ctx.fill();
-  ctx.fillStyle = cssVar('--accent-ink');
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, lx + tw / 2, ly + 10.5);
+  // Etiqueta: el punto tocado (con fecha) o el último valor
+  const fp = points[focus];
+  const text = short(Math.round(fp.y * 10) / 10) + (unit ? ' ' + unit : '');
+  tooltip(ctx, X(focus), Y(fp.y), w, pad, text, hl != null ? fmtDay(fp.t) : null);
+
+  bindScrub(canvas, points.map((_, i) => X(i)), (i) => lineChart(canvas, points, { ...opts, hl: i }));
 }
 
 /**
  * Gráfica de barras.
- * data: [{ label: texto, value: número }]  — la última barra se resalta
+ * data: [{ label: texto, value: número }]  — la última barra (o la tocada) se resalta
  */
-export function barChart(canvas, data) {
+export function barChart(canvas, data, opts = {}) {
+  const { hl = null } = opts;
   const { ctx, w, h } = setup(canvas, 150);
   const accent = cssVar('--accent');
   const muted = cssVar('--muted');
@@ -180,39 +261,45 @@ export function barChart(canvas, data) {
   const max = Math.max(1, ...data.map((d) => d.value));
   const slot = cw / data.length;
   const bw = Math.min(28, slot * 0.6);
+  const focus = hl ?? data.length - 1;
 
   data.forEach((d, i) => {
     const x = pad.l + slot * i + (slot - bw) / 2;
     const bh = d.value ? Math.max(6, (d.value / max) * ch) : 3;
     const y = pad.t + ch - bh;
-    const last = i === data.length - 1;
-    ctx.fillStyle = last ? accent : bar;
+    const on = i === focus;
+    ctx.fillStyle = on ? accent : bar;
     roundedTopRect(ctx, x, y, bw, bh, 6);
     ctx.fill();
 
     ctx.textAlign = 'center';
-    if (d.value) {
-      ctx.fillStyle = last ? accent : muted;
+    if (d.value || on) {
+      ctx.font = on ? `800 12px ${FONT}` : `600 11px ${FONT}`;
+      ctx.fillStyle = on ? accent : muted;
       ctx.textBaseline = 'alphabetic';
       ctx.fillText(d.value, x + bw / 2, y - 5);
+      ctx.font = `600 11px ${FONT}`;
     }
-    ctx.fillStyle = muted;
+    ctx.fillStyle = on && hl != null ? cssVar('--text') : muted;
     ctx.textBaseline = 'alphabetic';
     ctx.fillText(d.label, x + bw / 2, h - 5);
   });
+
+  bindScrub(canvas, data.map((_, i) => pad.l + slot * i + slot / 2), (i) => barChart(canvas, data, { ...opts, hl: i }));
 }
 
 /**
  * Gráfica de peso: puntos de cada pesada + línea de tendencia,
  * con el eje X proporcional al tiempo y línea de objetivo opcional.
- * points: [{ t, y }]   trend: [{ t, y }]   goal: número | null
+ * points: [{ t, y }]   trend: [{ t, y }] (mismo orden)   goal: número | null
  */
-export function bodyChart(canvas, points, trend, { goal = null, unit = 'kg', height = 220 } = {}) {
+export function bodyChart(canvas, points, trend, opts = {}) {
+  const { goal = null, unit = 'kg', height = 220, hl = null } = opts;
   const { ctx, w, h } = setup(canvas, height);
   const accent = cssVar('--accent');
   const muted = cssVar('--muted');
   const grid = cssVar('--line');
-  const pad = { l: 40, r: 16, t: 26, b: 26 };
+  const pad = { l: 40, r: 16, t: 40, b: 26 };
   const cw = w - pad.l - pad.r;
   const ch = h - pad.t - pad.b;
 
@@ -255,18 +342,17 @@ export function bodyChart(canvas, points, trend, { goal = null, unit = 'kg', hei
   }
 
   // Fechas
-  const fmt = (t) => new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short' }).format(t);
   ctx.textBaseline = 'alphabetic';
   if (t1 === t0) {
     ctx.textAlign = 'center';
-    ctx.fillText(fmt(t0), X(t0), h - 6);
+    ctx.fillText(fmtDay(t0), X(t0), h - 6);
   } else {
     ctx.textAlign = 'left';
-    ctx.fillText(fmt(t0), pad.l, h - 6);
+    ctx.fillText(fmtDay(t0), pad.l, h - 6);
     ctx.textAlign = 'center';
-    ctx.fillText(fmt((t0 + t1) / 2), pad.l + cw / 2, h - 6);
+    ctx.fillText(fmtDay((t0 + t1) / 2), pad.l + cw / 2, h - 6);
     ctx.textAlign = 'right';
-    ctx.fillText(fmt(t1), w - pad.r, h - 6);
+    ctx.fillText(fmtDay(t1), w - pad.r, h - 6);
   }
 
   // Objetivo (línea discontinua)
@@ -284,9 +370,9 @@ export function bodyChart(canvas, points, trend, { goal = null, unit = 'kg', hei
     ctx.fillStyle = cssVar('--ok');
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
-    ctx.font = '700 11px -apple-system, BlinkMacSystemFont, system-ui, sans-serif';
+    ctx.font = `700 11px ${FONT}`;
     ctx.fillText(`Objetivo ${short(goal)} ${unit}`, pad.l + 6, y - 4);
-    ctx.font = '600 11px -apple-system, BlinkMacSystemFont, system-ui, sans-serif';
+    ctx.font = `600 11px ${FONT}`;
   }
 
   // Área bajo la tendencia
@@ -302,6 +388,8 @@ export function bodyChart(canvas, points, trend, { goal = null, unit = 'kg', hei
     ctx.fillStyle = grad;
     ctx.fill();
   }
+
+  if (hl != null) guide(ctx, X(points[hl].t), pad.t - 6, pad.t + ch);
 
   // Pesadas (puntos pequeños)
   ctx.fillStyle = rgba('#8a919a', 0.75);
@@ -322,24 +410,33 @@ export function bodyChart(canvas, points, trend, { goal = null, unit = 'kg', hei
     ctx.stroke();
   }
 
-  // Último valor de tendencia
-  const lp = trend[trend.length - 1] || points[points.length - 1];
-  ctx.beginPath();
-  ctx.arc(X(lp.t), Y(lp.y), 5, 0, Math.PI * 2);
-  ctx.fillStyle = accent;
-  ctx.fill();
-  const text = `${lp.y.toLocaleString('es-ES', { maximumFractionDigits: 1 })} ${unit}`;
-  ctx.font = '700 12px -apple-system, BlinkMacSystemFont, system-ui, sans-serif';
-  const tw = ctx.measureText(text).width + 12;
-  const lx = Math.min(Math.max(X(lp.t) - tw / 2, pad.l), w - pad.r - tw);
-  const ly = Math.max(Y(lp.y) - 30, 2);
-  ctx.beginPath();
-  ctx.roundRect ? ctx.roundRect(lx, ly, tw, 20, 6) : ctx.rect(lx, ly, tw, 20);
-  ctx.fill();
-  ctx.fillStyle = cssVar('--accent-ink');
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, lx + tw / 2, ly + 10.5);
+  if (hl != null) {
+    // Pesada tocada: punto grande + tendencia de ese día
+    const p = points[hl];
+    const tp = trend[hl];
+    ctx.beginPath();
+    ctx.arc(X(p.t), Y(p.y), 6, 0, Math.PI * 2);
+    ctx.fillStyle = cssVar('--text');
+    ctx.fill();
+    if (tp) {
+      ctx.beginPath();
+      ctx.arc(X(tp.t), Y(tp.y), 4, 0, Math.PI * 2);
+      ctx.fillStyle = accent;
+      ctx.fill();
+    }
+    tooltip(ctx, X(p.t), Math.min(Y(p.y), tp ? Y(tp.y) : Infinity), w, pad,
+      `${fmtNum(p.y)} ${unit}${tp ? ` · tend. ${fmtNum(tp.y)}` : ''}`, fmtDay(p.t));
+  } else {
+    // Último valor de tendencia
+    const lp = trend[trend.length - 1] || points[points.length - 1];
+    ctx.beginPath();
+    ctx.arc(X(lp.t), Y(lp.y), 5, 0, Math.PI * 2);
+    ctx.fillStyle = accent;
+    ctx.fill();
+    tooltip(ctx, X(lp.t), Y(lp.y), w, pad, `${fmtNum(lp.y)} ${unit}`, null);
+  }
+
+  bindScrub(canvas, points.map((p) => X(p.t)), (i) => bodyChart(canvas, points, trend, { ...opts, hl: i }));
 }
 
 /** Minigráfica en SVG (para las medidas) */

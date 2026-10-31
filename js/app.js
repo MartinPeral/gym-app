@@ -6,8 +6,9 @@ import * as S from './store.js';
 import { lineChart, barChart, bodyChart, sparkline } from './chart.js';
 import { MUSCLES, bodyMap, muscleList, muscleSets } from './muscles.js';
 import { askCoach, aiUrl, splitRoutine, renderMarkdown } from './coach.js';
+import { stagger, countUp, moveTabIndicator, initSwipe } from './fx.js';
 
-const APP_VERSION = '1.5';
+const APP_VERSION = '1.6';
 const VIVAGYM_APP = 'https://apps.apple.com/app/id6448747670';
 
 const app = document.getElementById('app');
@@ -136,7 +137,10 @@ function render() {
   if (changed) window.scrollTo(0, 0);
   lastRouteKey = key;
 
+  stagger(app, changed);
+  moveTabIndicator();
   afterRender(r, changed);
+  if (changed) countUp(app);
   tick();
 }
 
@@ -418,6 +422,67 @@ function confetti(power = 1) {
   requestAnimationFrame(frame);
 }
 
+// ---------- Carrusel de rutinas ----------
+
+function ago(t) {
+  const d = Math.floor((S.startOfDay(Date.now()) - S.startOfDay(t)) / 864e5);
+  if (d <= 0) return 'hoy';
+  if (d === 1) return 'ayer';
+  if (d < 14) return `hace ${d} días`;
+  return `hace ${Math.round(d / 7)} semanas`;
+}
+
+function routineCarousel(routines) {
+  const slides = routines.map((r) => {
+    const last = S.state.workouts.find((w) => w.routineId === r.id);
+    const sets = r.exercises.reduce((a, e) => a + (Number(e.sets) || 0), 0);
+    const mins = Math.max(10, Math.round((sets * 2.6) / 5) * 5);
+    const more = r.exercises.length - 4;
+    return `
+      <article class="rcard" style="--rc:${S.routineColor(r)}">
+        <div class="rc-top">
+          <span class="rc-badge">${r.place ? `${PLACE[r.place].icon} ${PLACE[r.place].label}` : `${r.exercises.length} ejercicios`}</span>
+          <a class="rc-edit" href="#/rutina/${r.id}" aria-label="Editar ${esc(r.name)}">Editar</a>
+        </div>
+        <h3>${esc(r.name)}</h3>
+        <p class="rc-meta">${sets} series · ~${mins} min</p>
+        <ul class="rc-ex">
+          ${r.exercises.slice(0, 4).map((e) => `<li><span>${esc(e.name)}</span><em>${e.sets}×${e.reps}</em></li>`).join('')}
+          ${more > 0 ? `<li class="rc-more">+${more} más</li>` : ''}
+        </ul>
+        <div class="rc-foot">
+          <span>${last ? `Última vez ${ago(last.start)}` : 'Aún sin estrenar'}</span>
+          <button class="rc-go" data-action="start-routine" data-id="${r.id}">${I.play}Empezar</button>
+        </div>
+      </article>`;
+  }).join('');
+  return `
+    <div class="rcarousel" id="rcarousel">
+      ${slides}
+      <button class="rcard rc-new" data-action="new-routine">
+        <span class="rc-plus">${I.plus}</span>
+        <strong>Nueva rutina</strong>
+        <small>O pídesela al entrenador ✨</small>
+      </button>
+    </div>
+    <div class="rc-dots" aria-hidden="true">${[...routines, null].map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>`;
+}
+
+function bindCarousel() {
+  const c = document.getElementById('rcarousel');
+  if (!c) return;
+  const dots = [...app.querySelectorAll('.rc-dots i')];
+  c.addEventListener('scroll', () => {
+    const cards = [...c.children];
+    const mid = c.scrollLeft + c.clientWidth / 2;
+    let best = 0;
+    cards.forEach((el, i) => {
+      if (Math.abs(el.offsetLeft + el.offsetWidth / 2 - mid) < Math.abs(cards[best].offsetLeft + cards[best].offsetWidth / 2 - mid)) best = i;
+    });
+    dots.forEach((d, i) => d.classList.toggle('on', i === best));
+  }, { passive: true });
+}
+
 // ---------- Pantalla: Inicio ----------
 
 function viewHome() {
@@ -467,11 +532,11 @@ function viewHome() {
       <button class="tile" data-action="open-plates">${I.plates}<span>Discos</span></button>
     </div>
 
-    <h2 class="section-title">Tus rutinas</h2>
-    <div class="stack">
-      ${routines.length ? routines.map(routineCard).join('') :
-        '<a class="btn ghost block" href="#/rutinas">Crea tu primera rutina</a>'}
+    <div class="section-row">
+      <h2 class="section-title">Tus rutinas</h2>
+      <a class="link" href="#/rutinas">Ver todas</a>
     </div>
+    ${routineCarousel(routines)}
 
     ${workouts[0] ? `
       <h2 class="section-title">Último entrenamiento</h2>
@@ -510,7 +575,9 @@ function setRows(ex, i) {
       prevText = p ? `${num(p.kg)} × ${p.reps}` : '—';
     }
     return `
-      <div class="set-row ${s.done ? 'done' : ''} ${popKey === `${i}-${j}` ? 'pop' : ''}">
+      <div class="swipe" data-swipe="${ex.sets.length > 1 ? 1 : 0}" data-ex="${i}" data-set="${j}">
+      <div class="swipe-bg">${I.trash}<span>Borrar</span></div>
+      <div class="swipe-row set-row ${s.done ? 'done' : ''} ${popKey === `${i}-${j}` ? 'pop' : ''}">
         <span class="set-n">${j + 1}</span>
         <span class="prev">${prevText}</span>
         <input class="num" type="number" inputmode="decimal" step="any" min="0"
@@ -518,18 +585,41 @@ function setRows(ex, i) {
         <input class="num" type="number" inputmode="${cardio ? 'decimal' : 'numeric'}" step="any" min="0"
           placeholder="${phB}" value="${esc(s[fb] ?? '')}" data-field="${fb}" data-ex="${i}" data-set="${j}" aria-label="${fb} serie ${j + 1}">
         <button class="check" data-action="toggle-set" data-ex="${i}" data-set="${j}" aria-label="Completar serie ${j + 1}">${I.check}</button>
+      </div>
       </div>`;
   }).join('');
 }
 
-function exerciseCard(ex, i) {
+let openDone = new Set(); // ejercicios terminados que el usuario ha desplegado
+let openDoneFor = null; // id del entreno al que se refiere
+let scrollToCurrent = false;
+
+const exDone = (ex) => ex.sets.length > 0 && ex.sets.every((s) => s.done);
+
+function exerciseCard(ex, i, current) {
   const cardio = isCardio(ex);
+  const done = exDone(ex);
+  if (done && !openDone.has(i)) {
+    const best = cardio
+      ? `${num(ex.sets.reduce((a, s) => a + (Number(s.min) || 0), 0))} min`
+      : `máx ${num(Math.max(...ex.sets.map((s) => Number(s.kg) || 0)))} kg`;
+    return `
+      <section class="card ex-card complete collapsed">
+        <button class="ex-fold" data-action="ex-toggle" data-ex="${i}" aria-expanded="false">
+          <span class="ex-ok">${I.check}</span>
+          <span class="ex-fold-txt"><strong>${esc(ex.name)}</strong><small>${ex.sets.length} ${ex.sets.length === 1 ? 'serie' : 'series'} · ${best}</small></span>
+          ${I.down}
+        </button>
+      </section>`;
+  }
   return `
-    <section class="card ex-card">
+    <section class="card ex-card ${current ? 'current' : ''} ${done ? 'complete' : ''}" data-ex="${i}">
+      ${current ? '<span class="now-tag">Ahora</span>' : ''}
       <div class="ex-head">
         <h3>${esc(ex.name)}${cardio ? '<span class="tag">Cardio</span>' : ''}</h3>
         <div class="ex-tools">
           ${cardio ? '' : `<button class="icon-btn sm ghost" data-action="open-plates" data-ex="${i}" aria-label="Calcular discos">${I.calc}</button>`}
+          ${done ? `<button class="icon-btn sm ghost" data-action="ex-toggle" data-ex="${i}" aria-label="Plegar">${I.up}</button>` : ''}
           <button class="icon-btn sm ghost" data-action="remove-exercise" data-ex="${i}" aria-label="Quitar ejercicio">${I.trash}</button>
         </div>
       </div>
@@ -545,6 +635,8 @@ function exerciseCard(ex, i) {
 
 function viewWorkout() {
   const a = S.state.active;
+  if (openDoneFor !== a.id) { openDone = new Set(); openDoneFor = a.id; }
+  const currentIdx = a.exercises.findIndex((e) => !exDone(e));
   const done = a.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0);
   const total = a.exercises.reduce((n, e) => n + e.sets.length, 0);
   return `
@@ -565,8 +657,10 @@ function viewWorkout() {
     </div>
 
     <div class="stack">
-      ${a.exercises.map(exerciseCard).join('')}
+      ${a.exercises.map((ex, i) => exerciseCard(ex, i, i === currentIdx)).join('')}
     </div>
+    ${a.exercises.length && currentIdx === -1 ? `
+      <div class="all-done">🎉 <strong>¡Todo completado!</strong> Pulsa <b>Terminar</b> para guardar el entreno.</div>` : ''}
     ${a.exercises.length ? '' : `
       <div class="empty">${I.dumbbell}<p>Añade tu primer ejercicio para empezar</p></div>`}
 
@@ -943,6 +1037,7 @@ function viewProgress() {
           `<button class="${k === progressMetric ? 'on' : ''}" data-action="metric" data-m="${k}">${m.label}</button>`).join('')}
       </div>
       <canvas id="ch-ex" class="mt"></canvas>
+      <p class="chart-hint">Toca y desliza sobre la gráfica para ver cada sesión</p>
       <div class="stats mt">${stats}</div>
     </section>
   `;
@@ -1436,7 +1531,12 @@ function drawBodyChart() {
 }
 
 function afterRender(r, changed = false) {
-  if (r.name === 'inicio') animateRing(changed);
+  if (r.name === 'inicio') { animateRing(changed); bindCarousel(); }
+  if (r.name === 'activo' && scrollToCurrent) {
+    scrollToCurrent = false;
+    const next = app.querySelector('.ex-card.current') || app.querySelector('.all-done');
+    if (next) setTimeout(() => next.scrollIntoView({ behavior: 'smooth', block: 'center' }), 350);
+  }
   if (r.name === 'cuerpo') drawBodyChart();
   if (r.name === 'resumen' && celebrate === r.id) {
     const w = S.state.workouts.find((x) => x.id === r.id);
@@ -1689,10 +1789,31 @@ function tick() {
     }
     restEl.hidden = false;
     document.getElementById('rest-time').textContent = clock(left);
-    restEl.querySelector('.rest-bar i').style.width = `${(left / a.restTotal) * 100}%`;
+    const frac = Math.max(0, Math.min(1, left / a.restTotal));
+    restEl.querySelectorAll('.rf').forEach((c) => (c.style.strokeDashoffset = String(1 - frac)));
+    restEl.classList.toggle('ending', left <= 5);
+    if (restEl.classList.contains('big')) document.getElementById('rest-next').innerHTML = nextSetText();
   } else {
+    if (restEl.classList.contains('big')) { restEl.classList.remove('big'); document.body.classList.remove('locked'); }
     restEl.hidden = true;
   }
+}
+
+/** Texto de la próxima serie pendiente (para la pantalla de descanso) */
+function nextSetText() {
+  const a = S.state.active;
+  if (!a) return '';
+  for (const ex of a.exercises) {
+    const j = ex.sets.findIndex((s) => !s.done);
+    if (j === -1) continue;
+    const s = ex.sets[j];
+    const p = S.lastSets(ex.name)?.[j];
+    if (isCardio(ex)) return `<small>Siguiente</small><strong>${esc(ex.name)}</strong><span>Bloque ${j + 1}</span>`;
+    const kg = s.kg !== '' ? s.kg : p?.kg;
+    const reps = s.reps !== '' ? s.reps : p?.reps ?? s.target;
+    return `<small>Siguiente</small><strong>${esc(ex.name)}</strong><span>Serie ${j + 1}${kg !== undefined && kg !== '' ? ` · ${num(Number(kg))} kg` : ''}${reps ? ` × ${reps}` : ''}</span>`;
+  }
+  return '<small>Siguiente</small><strong>¡Último descanso!</strong><span>Ya has hecho todas las series</span>';
 }
 setInterval(tick, 500);
 
@@ -1773,6 +1894,7 @@ const actions = {
       }
       s.done = true;
       popKey = `${el.dataset.ex}-${el.dataset.set}`;
+      if (exDone(ex)) scrollToCurrent = true;
       navigator.vibrate?.(15);
       unlockAudio();
       if (!cardio) startRest();
@@ -1946,6 +2068,22 @@ const actions = {
     S.deleteWorkout(el.dataset.id);
     toast('Eliminado del historial');
     go('#/historial');
+  },
+
+  // --- Rediseño: plegar ejercicios y descanso ampliado ---
+  'ex-toggle': (el) => {
+    const i = +el.dataset.ex;
+    openDone.has(i) ? openDone.delete(i) : openDone.add(i);
+    render();
+  },
+  'rest-expand': () => {
+    restEl.classList.add('big');
+    document.body.classList.add('locked');
+    tick();
+  },
+  'rest-shrink': () => {
+    restEl.classList.remove('big');
+    document.body.classList.remove('locked');
   },
 
   // --- Entrenador IA ---
@@ -2274,4 +2412,14 @@ document.addEventListener('submit', (e) => {
   input.value = '';
   input.blur();
   sendCoach(text);
+});
+
+// Deslizar una serie a la izquierda para borrarla
+initSwipe((el) => {
+  const ex = S.state.active?.exercises[+el.dataset.ex];
+  if (!ex || ex.sets.length < 2) return render();
+  ex.sets.splice(+el.dataset.set, 1);
+  S.save();
+  render();
+  toast('Serie eliminada');
 });

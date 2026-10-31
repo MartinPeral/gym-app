@@ -23,6 +23,7 @@
 
   <!-- Barra inferior de pestañas -->
   <nav id="tabbar" aria-label="Navegación principal">
+    <span class="tab-ind" aria-hidden="true"></span>
     <a href="#/inicio" data-tab="inicio">
       <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/></svg>
       Inicio
@@ -45,15 +46,24 @@
     </a>
   </nav>
 
-  <!-- Temporizador de descanso -->
+  <!-- Temporizador de descanso (toca el anillo para ampliarlo) -->
   <div id="rest" hidden>
-    <div class="rest-bar"><i></i></div>
-    <div class="rest-row">
+    <button class="rest-ring" data-action="rest-expand" aria-label="Ampliar descanso">
+      <svg viewBox="0 0 44 44" aria-hidden="true">
+        <circle class="rt" cx="22" cy="22" r="19" pathLength="1"/>
+        <circle class="rf" cx="22" cy="22" r="19" pathLength="1"/>
+      </svg>
+      <span class="rest-time"><small>Descanso</small><strong id="rest-time">0:00</strong></span>
+    </button>
+    <p class="rest-next" id="rest-next"></p>
+    <div class="rest-actions">
       <button class="btn sm" data-action="rest-add" data-sec="-15">−15 s</button>
-      <div class="rest-time"><small>Descanso</small><strong id="rest-time">0:00</strong></div>
       <button class="btn sm" data-action="rest-add" data-sec="15">+15 s</button>
       <button class="btn sm primary" data-action="rest-skip">Saltar</button>
     </div>
+    <button class="rest-min" data-action="rest-shrink" aria-label="Minimizar">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
   </div>
 
   <div id="overlay" hidden></div>
