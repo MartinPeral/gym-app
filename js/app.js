@@ -5,8 +5,9 @@
 import * as S from './store.js';
 import { lineChart, barChart, bodyChart, sparkline } from './chart.js';
 import { MUSCLES, bodyMap, muscleList, muscleSets } from './muscles.js';
+import { askCoach, aiUrl, splitRoutine, renderMarkdown } from './coach.js';
 
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 const VIVAGYM_APP = 'https://apps.apple.com/app/id6448747670';
 
 const app = document.getElementById('app');
@@ -75,6 +76,8 @@ const I = {
   plates: svg('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/>'),
   calc: svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>', 'width="18" height="18"'),
   bulb: svg('<path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0012 3z"/>', 'width="18" height="18"'),
+  spark: svg('<path d="M12 3l1.8 4.6L18.5 9.5l-4.7 1.9L12 16l-1.8-4.6L5.5 9.5l4.7-1.9z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>'),
+  send: svg('<path d="M12 19V5M6 11l6-6 6 6"/>', 'stroke-width="2.6"'),
   user: svg('<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/>'),
   scale: svg('<rect x="3" y="3" width="18" height="18" rx="5"/><path d="M8 9a5 5 0 018 0"/><path d="M12 9l1.5-2"/>', 'width="34" height="34" stroke-width="1.8"'),
   ruler: svg('<path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/>', 'width="18" height="18"'),
@@ -99,8 +102,9 @@ const TAB_OF = {
   historial: 'historial', entreno: 'historial', resumen: 'historial',
   progreso: 'progreso',
   cuerpo: 'cuerpo',
+  entrenador: 'inicio',
 };
-const NO_TABS = ['activo', 'rutina', 'ajustes', 'resumen'];
+const NO_TABS = ['activo', 'rutina', 'ajustes', 'resumen', 'entrenador'];
 
 let lastRouteKey = '';
 let popKey = null; // serie recién completada (para animarla)
@@ -112,7 +116,7 @@ function render() {
     inicio: viewHome, rutinas: viewRoutines, rutina: viewRoutineEditor,
     activo: viewWorkout, historial: viewHistory, entreno: viewWorkoutDetail,
     resumen: viewSummary, progreso: viewProgress, ajustes: viewSettings,
-    cuerpo: viewBody,
+    cuerpo: viewBody, entrenador: viewCoach,
   };
   const view = views[r.name];
   if (!view) return go('#/inicio');
@@ -425,7 +429,10 @@ function viewHome() {
         <p class="eyebrow">${esc(cap(date(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' })))}</p>
         <h1>${greeting()}</h1>
       </div>
-      <a class="icon-btn" href="#/ajustes" aria-label="Ajustes">${I.gear}</a>
+      <div class="top-actions">
+        <a class="icon-btn spark" href="#/entrenador" aria-label="Entrenador IA">${I.spark}</a>
+        <a class="icon-btn" href="#/ajustes" aria-label="Ajustes">${I.gear}</a>
+      </div>
     </header>
 
     ${active ? `
@@ -445,6 +452,12 @@ function viewHome() {
         ? `<a class="stat" href="#/cuerpo"><span class="v">${num(S.weightTrend().at(-1).trend, 1)}</span><span class="l">Peso (kg)</span></a>`
         : stat(w.total, 'Entrenos totales')}
     </div>
+
+    <a class="card coach-cta mt" href="#/entrenador">
+      <span class="coach-ico">${I.spark}</span>
+      <span class="coach-txt"><strong>Pregúntale a tu entrenador</strong><small>Rutinas, dudas y consejos con tus datos</small></span>
+      ${I.chevron}
+    </a>
 
     <div class="mt">${gymCard()}</div>
 
@@ -1199,6 +1212,107 @@ function openMeasures() {
     </div>`, 'bottom');
 }
 
+// ---------- Pantalla: Entrenador IA ----------
+
+let coachBusy = false;
+let coachError = null;
+const COACH_SUGGESTIONS = [
+  '¿Qué entreno hoy?',
+  '¿Cómo voy esta semana?',
+  'Hazme una rutina para casa sin material',
+  '¿En qué ejercicio me estoy estancando?',
+  'Hazme una rutina de 4 días para ganar masa',
+];
+
+function coachMessage(m, i) {
+  if (m.role === 'user') return `<div class="msg user"><div class="bubble">${esc(m.content).replace(/\n/g, '<br>')}</div></div>`;
+  const { text, routine } = splitRoutine(m.content);
+  const saved = m.savedRoutine;
+  return `
+    <div class="msg bot">
+      <span class="bot-ico">${I.spark}</span>
+      <div class="bubble md">${renderMarkdown(text)}
+        ${routine ? `
+          <div class="ai-routine">
+            <div class="air-head"><strong>${esc(routine.name)}</strong>${routine.place ? placeTag(routine.place) : ''}</div>
+            <ol>${routine.exercises.map((e) => `<li><span>${esc(e.name)}</span><em>${e.sets} × ${e.reps}${S.exerciseType(e.name) === 'cardio' ? ' min' : ''}</em></li>`).join('')}</ol>
+            ${saved
+              ? `<a class="btn sm block" href="#/rutina/${saved}">✓ Guardada · Ver rutina</a>`
+              : `<button class="btn sm primary block" data-action="ai-save-routine" data-i="${i}">${I.plus}Guardar rutina</button>`}
+          </div>` : ''}
+      </div>
+    </div>`;
+}
+
+function viewCoach() {
+  const chat = S.state.chat;
+  const url = aiUrl();
+  const empty = !chat.length;
+  return `
+    ${topBar('Entrenador', {
+      back: '#/inicio',
+      action: chat.length ? `<button class="icon-btn" data-action="ai-clear" aria-label="Borrar conversación">${I.trash}</button>` : '',
+    })}
+
+    ${!url ? `
+      <section class="card onboard">
+        <div class="onboard-icon">${I.spark}</div>
+        <h2>Falta conectar el servidor</h2>
+        <p class="hint">Pega la dirección de tu Cloudflare Worker en Ajustes → Entrenador IA.</p>
+        <a class="btn primary block mt" href="#/ajustes">Ir a Ajustes</a>
+      </section>` : empty ? `
+      <div class="coach-hello">
+        <div class="onboard-icon">${I.spark}</div>
+        <h2>¿En qué te ayudo?</h2>
+        <p class="hint">Conozco tus entrenos, tus marcas, tu peso y tus rutinas. Pregúntame lo que quieras o pídeme una rutina y la guardo por ti.</p>
+      </div>` : ''}
+
+    <div class="chat">
+      ${chat.map(coachMessage).join('')}
+      ${coachBusy ? `<div class="msg bot"><span class="bot-ico">${I.spark}</span><div class="bubble typing"><i></i><i></i><i></i></div></div>` : ''}
+      ${coachError ? `<div class="chat-error">${esc(coachError)} <button class="btn sm" data-action="ai-retry">Reintentar</button></div>` : ''}
+    </div>
+
+    ${url && !coachBusy && empty ? `
+      <div class="suggest-chips">
+        ${COACH_SUGGESTIONS.map((q) => `<button class="chip" data-action="ai-suggest" data-q="${esc(q)}">${esc(q)}</button>`).join('')}
+      </div>` : ''}
+
+    <p class="disclaimer">Respuestas generadas por IA: pueden equivocarse. Para dolor, lesiones o dietas, consulta a un profesional. Al preguntar se envía un resumen de tus datos de GymLog a tu servidor de Cloudflare.</p>
+
+    <form class="composer" data-form="ai">
+      <textarea id="ai-input" rows="1" maxlength="1500" placeholder="${url ? 'Escribe tu pregunta…' : 'Configura el servidor en Ajustes'}" ${url ? '' : 'disabled'} enterkeyhint="send"></textarea>
+      <button class="send" type="submit" aria-label="Enviar" ${url && !coachBusy ? '' : 'disabled'}>${I.send}</button>
+    </form>
+  `;
+}
+
+function scrollChatEnd(smooth = true) {
+  requestAnimationFrame(() => window.scrollTo({ top: document.body.scrollHeight, behavior: smooth ? 'smooth' : 'auto' }));
+}
+
+async function sendCoach(text) {
+  text = (text || '').trim();
+  if (!text || coachBusy) return;
+  const chat = S.state.chat;
+  if (text !== '__retry__') chat.push({ role: 'user', content: text, t: Date.now() });
+  coachBusy = true;
+  coachError = null;
+  S.save();
+  if (route().name === 'entrenador') { render(); scrollChatEnd(); }
+  try {
+    const reply = await askCoach(chat);
+    chat.push({ role: 'assistant', content: reply, t: Date.now() });
+    if (chat.length > 40) chat.splice(0, chat.length - 40);
+    S.save();
+  } catch (e) {
+    coachError = e.message;
+  } finally {
+    coachBusy = false;
+  }
+  if (route().name === 'entrenador') { render(); scrollChatEnd(); }
+}
+
 // ---------- Pantalla: Ajustes ----------
 
 function viewSettings() {
@@ -1223,6 +1337,16 @@ function viewSettings() {
 
   return `
     ${topBar('Ajustes', { back: '#/inicio' })}
+
+    <h2 class="section-title">Entrenador IA</h2>
+    <section class="card stack">
+      <label class="field">
+        <span>Dirección del servidor (Cloudflare Worker)</span>
+        <input class="input" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false"
+          data-field="ai-url" value="${esc(st.aiUrl || '')}" placeholder="https://gymlog-ai.tu-usuario.workers.dev">
+      </label>
+      <p class="hint" style="margin:0">${aiUrl() ? '✓ Entrenador configurado.' : 'Sin servidor, el entrenador no puede responder.'} Usa el plan gratuito de Workers AI: si un día se agota, deja de responder hasta el día siguiente, sin coste.</p>
+    </section>
 
     <h2 class="section-title">Casa o gimnasio</h2>
     <section class="card stack">
@@ -1824,6 +1948,34 @@ const actions = {
     go('#/historial');
   },
 
+  // --- Entrenador IA ---
+  'ai-suggest': (el) => sendCoach(el.dataset.q),
+  'ai-retry': () => {
+    const last = S.state.chat[S.state.chat.length - 1];
+    if (last?.role === 'user') sendCoach('__retry__');
+  },
+  'ai-clear': async () => {
+    if (!(await ask('¿Borrar la conversación con el entrenador?', { ok: 'Borrar', danger: true }))) return;
+    S.state.chat = [];
+    coachError = null;
+    S.save();
+    render();
+  },
+  'ai-save-routine': (el) => {
+    const msg = S.state.chat[+el.dataset.i];
+    const { routine } = splitRoutine(msg?.content || '');
+    if (!routine) return;
+    let name = routine.name;
+    let k = 2;
+    while (S.state.routines.some((r) => S.norm(r.name) === S.norm(name))) name = `${routine.name} (${k++})`;
+    const id = S.uid();
+    S.upsertRoutine({ id, name, place: routine.place, exercises: routine.exercises });
+    msg.savedRoutine = id;
+    S.save();
+    toast(`Rutina «${name}» guardada`);
+    render();
+  },
+
   // --- Casa o gimnasio ---
   'toggle-place': () => {
     const a = S.state.active;
@@ -2005,6 +2157,11 @@ document.addEventListener('input', (e) => {
   const f = t.dataset.field;
 
   if (t.id === 'picker-q') return renderPickerList(t.value);
+  if (t.id === 'ai-input') {
+    t.style.height = 'auto';
+    t.style.height = Math.min(t.scrollHeight, 140) + 'px';
+    return;
+  }
   if (t.id === 'plate-kg') return renderPlates();
   if (t.id === 'class-other') {
     overlay.querySelectorAll('#class-types .chip').forEach((c) => c.classList.toggle('on', !t.value.trim() && c.dataset.name === classForm.name));
@@ -2029,7 +2186,13 @@ document.addEventListener('change', async (e) => {
   const t = e.target;
   const f = t.dataset.field;
   const st = S.state.settings;
-  if (f === 'auto-place') {
+  if (f === 'ai-url') {
+    const v = t.value.trim();
+    if (v && !/^https:\/\/[^\s]+$/.test(v)) { toast('La dirección debe empezar por https://'); return; }
+    st.aiUrl = v.replace(/\/+$/, '');
+    S.save();
+    toast(v ? 'Servidor del entrenador guardado' : 'Servidor eliminado');
+  } else if (f === 'auto-place') {
     st.autoPlace = t.checked;
     S.save();
     toast(t.checked ? 'Detección automática activada' : 'Detección automática desactivada');
@@ -2077,6 +2240,11 @@ document.addEventListener('change', async (e) => {
 
 // Pulsar "Intro" en el teclado del móvil pasa al siguiente campo
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && e.target.id === 'ai-input') {
+    e.preventDefault();
+    e.target.form.requestSubmit();
+    return;
+  }
   if (e.key !== 'Enter' || !e.target.matches('#app input.num')) return;
   e.preventDefault();
   const inputs = [...app.querySelectorAll('input.num')];
@@ -2096,3 +2264,14 @@ render();
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
 }
+
+// Enviar pregunta al entrenador
+document.addEventListener('submit', (e) => {
+  if (e.target.dataset.form !== 'ai') return;
+  e.preventDefault();
+  const input = document.getElementById('ai-input');
+  const text = input.value;
+  input.value = '';
+  input.blur();
+  sendCoach(text);
+});

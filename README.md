@@ -2,6 +2,19 @@
 
 App web instalable (PWA) para el gimnasio: rutinas, registro de entrenamientos con temporizador de descanso, historial y gráficas de progreso. Funciona sin conexión y los datos se guardan en el propio móvil.
 
+## Novedades de la versión 1.5 (Entrenador IA)
+
+- **Chat con un entrenador IA** (botón ✨ en Inicio): responde usando tus entrenos, marcas, peso, rutinas y músculos trabajados.
+- **Rutinas generadas por la IA** con un botón para guardarlas directamente.
+- Funciona con un **Cloudflare Worker** (`worker/worker.js`) y el plan gratuito de **Workers AI**: sin claves en el código y sin coste. Si se agota el cupo diario, deja de responder hasta el día siguiente.
+
+### Poner en marcha el servidor
+
+1. En el panel de Cloudflare: Workers & Pages → Create → Hello World → nómbralo `gymlog-ai` → Deploy.
+2. Edit code → pega el contenido de `worker/worker.js` → Deploy.
+3. Settings → Bindings → Add → Workers AI → nombre `AI` → Deploy.
+4. Copia la URL (`https://gymlog-ai.<tu-subdominio>.workers.dev`) y pégala en GymLog → Ajustes → Entrenador IA.
+
 ## Novedades de la versión 1.4 (casa o gimnasio)
 
 - **Detección automática del lugar:** al empezar un entreno, la app compara tu ubicación con la del gimnasio (radio de 300 m). La primera vez te pregunta si estás en el gimnasio y guarda ese punto. Si no hay ubicación y el gimnasio está cerrado, cuenta como casa. Siempre puedes cambiarlo a mano.

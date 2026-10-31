@@ -122,6 +122,7 @@ const defaultState = () => ({
   profile: null, // { sex, birth, height, goalWeight, activity }
   weights: [], // [{ id, date: 'AAAA-MM-DD', kg, fat? }]  ordenados por fecha
   measures: [], // [{ id, date, neck?, chest?, waist?, hips?, arm?, thigh?, calf? }]
+  chat: [], // conversación con el entrenador IA
 });
 
 // ---------- Persistencia ----------
@@ -144,6 +145,7 @@ function normalize(data) {
     profile: data.profile || null,
     weights: Array.isArray(data.weights) ? data.weights : [],
     measures: Array.isArray(data.measures) ? data.measures : [],
+    chat: Array.isArray(data.chat) ? data.chat : [],
     version: 3,
   };
 }
