@@ -7,7 +7,7 @@ import * as S from './store.js';
 import { MUSCLES, muscleSets } from './muscles.js';
 
 /** Dirección del servidor. Se puede cambiar en Ajustes. */
-export const DEFAULT_AI_URL = '';
+export const DEFAULT_AI_URL = 'https://gymlog-ai.martinperal10.workers.dev';
 
 export const aiUrl = () => (S.state.settings.aiUrl || DEFAULT_AI_URL).trim();
 
