@@ -2,6 +2,11 @@
 
 App web instalable (PWA) para el gimnasio: rutinas, registro de entrenamientos con temporizador de descanso, historial y gráficas de progreso. Funciona sin conexión y los datos se guardan en el propio móvil.
 
+## Novedades de la versión 1.7
+
+- **Color de la app:** elige entre 11 colores en Ajustes → Apariencia. Cambia al momento en toda la app (botones, gráficas, anillos, mapa muscular…).
+- **Animación de inicio:** al abrir la app se monta la mancuerna y aparece el nombre. Toca la pantalla para saltarla.
+
 ## Novedades de la versión 1.6 (rediseño interactivo)
 
 - **Animaciones:** las pantallas entran de forma escalonada, los números cuentan hasta su valor y la barra de pestañas tiene un indicador que se desliza.

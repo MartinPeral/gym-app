@@ -5,7 +5,7 @@
 //  Cuando cambies archivos, sube el número de versión.
 // =============================================================
 
-const CACHE = 'gymlog-v10';
+const CACHE = 'gymlog-v11';
 const ASSETS = [
   './',
   './index.html',

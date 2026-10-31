@@ -8,7 +8,7 @@ import { MUSCLES, bodyMap, muscleList, muscleSets } from './muscles.js';
 import { askCoach, aiUrl, splitRoutine, renderMarkdown } from './coach.js';
 import { stagger, countUp, moveTabIndicator, initSwipe } from './fx.js';
 
-const APP_VERSION = '1.6';
+const APP_VERSION = '1.7';
 const VIVAGYM_APP = 'https://apps.apple.com/app/id6448747670';
 
 const app = document.getElementById('app');
@@ -153,7 +153,7 @@ const PLACE = {
   home: { icon: '🏠', label: 'Casa' },
   class: { icon: '👥', label: 'Clase' },
 };
-const PLACE_COLOR = { gym: '#d4ff3a', home: '#4da3ff', class: '#c084fc' };
+const PLACE_COLOR = { gym: 'var(--accent)', home: '#4da3ff', class: '#c084fc' };
 
 const placeTag = (p) => `<span class="place-tag ${p}">${PLACE[p].icon} ${PLACE[p].label}</span>`;
 
@@ -367,7 +367,7 @@ function heatmap(weeks = 17) {
     </div>
     <div class="heat-foot">
       <span><strong>${trained}</strong> días entrenados</span>
-      <div class="legend">Menos${sw('var(--surface-2)')}${sw('rgba(212,255,58,.3)')}${sw('rgba(212,255,58,.62)')}${sw('var(--accent)')}Más</div>
+      <div class="legend">Menos${sw('var(--surface-2)')}${sw('rgba(var(--accent-rgb),.3)')}${sw('rgba(var(--accent-rgb),.62)')}${sw('var(--accent)')}Más</div>
     </div>`;
 }
 
@@ -386,7 +386,7 @@ function confetti(power = 1) {
   c.height = H * dpr;
   const ctx = c.getContext('2d');
   ctx.scale(dpr, dpr);
-  const colors = ['#d4ff3a', '#ff8a3d', '#4da3ff', '#3ddc84', '#c084fc', '#ff5f7e', '#ffd43b'];
+  const colors = [getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#d4ff3a', '#ff8a3d', '#4da3ff', '#3ddc84', '#c084fc', '#ff5f7e', '#ffd43b'];
   const parts = Array.from({ length: Math.round(150 * power) }, (_, i) => ({
     x: W / 2 + (Math.random() - 0.5) * 60,
     y: H * 0.28,
@@ -910,7 +910,7 @@ function musclesCard(sets, title, steps, extra = '') {
       <h2 class="card-title">${title}</h2>
       ${extra}
       ${bodyMap(sets, steps)}
-      <div class="legend">Menos${sw('#353b42')}${sw('rgba(212,255,58,.3)')}${sw('rgba(212,255,58,.62)')}${sw('var(--accent)')}Más series</div>
+      <div class="legend">Menos${sw('#353b42')}${sw('rgba(var(--accent-rgb),.3)')}${sw('rgba(var(--accent-rgb),.62)')}${sw('var(--accent)')}Más series</div>
       ${muscleList(sets)}
     </section>`;
 }
@@ -1432,6 +1432,18 @@ function viewSettings() {
 
   return `
     ${topBar('Ajustes', { back: '#/inicio' })}
+
+    <h2 class="section-title">Apariencia</h2>
+    <section class="card">
+      <div class="theme-preview">
+        <span class="tp-ring"><i></i></span>
+        <span class="tp-txt"><strong>Color de la app</strong><small id="theme-name">${esc((S.THEMES.find((t) => t[0] === st.accent) || ['', 'Personalizado'])[1])}</small></span>
+        <span class="tp-btn">Empezar</span>
+      </div>
+      <div class="theme-grid">
+        ${S.THEMES.map(([c, n]) => `<button class="theme-dot ${c === st.accent ? 'on' : ''}" style="--c:${c}" data-action="set-theme" data-c="${c}" data-n="${n}" aria-label="${n}"></button>`).join('')}
+      </div>
+    </section>
 
     <h2 class="section-title">Entrenador IA</h2>
     <section class="card stack">
@@ -2234,6 +2246,15 @@ const actions = {
   },
 
   // --- Ajustes ---
+  'set-theme': (el) => {
+    S.state.settings.accent = el.dataset.c;
+    S.save();
+    document.documentElement.classList.add('theme-anim');
+    S.applyTheme(el.dataset.c);
+    setTimeout(() => document.documentElement.classList.remove('theme-anim'), 500);
+    app.querySelectorAll('.theme-dot').forEach((d) => d.classList.toggle('on', d === el));
+    document.getElementById('theme-name').textContent = el.dataset.n;
+  },
   'plate-toggle': (el) => {
     const p = Number(el.dataset.p);
     const list = S.state.settings.plates;
@@ -2397,7 +2418,26 @@ setInterval(() => {
 
 // ---------- Arranque ----------
 
+S.applyTheme();
 render();
+
+// Animación de inicio: se aparta y deja entrar la pantalla
+(() => {
+  const splash = document.getElementById('splash');
+  if (!splash) return;
+  const quick = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let gone = false;
+  const done = () => {
+    if (gone) return;
+    gone = true;
+    splash.classList.add('out');
+    lastRouteKey = ''; // vuelve a lanzar la animación de entrada de la pantalla
+    render();
+    setTimeout(() => splash.remove(), 500);
+  };
+  splash.addEventListener('click', done);
+  setTimeout(done, quick ? 0 : 1700);
+})();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));

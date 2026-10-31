@@ -50,7 +50,7 @@ export const ALL_PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];
 /** Colores para las rutinas */
 export const PALETTE = ['#ff8a3d', '#4da3ff', '#3ddc84', '#d4ff3a', '#c084fc', '#ff5f7e', '#ffd43b', '#2dd4bf'];
 const CLASS_COLOR = '#c084fc';
-const FREE_COLOR = '#d4ff3a';
+const FREE_COLOR = 'var(--accent)';
 
 export const routineColor = (r) =>
   r?.color || PALETTE[Math.max(0, state.routines.indexOf(r)) % PALETTE.length];
@@ -99,6 +99,7 @@ function seedRoutines() {
 
 const defaultSettings = () => ({
   weeklyGoal: 4, // entrenamientos por semana
+  accent: '#d4ff3a', // color principal de la app
   restSeconds: 90,
   increment: 2.5, // kg que sugiere subir
   bar: 20, // peso de la barra
@@ -808,4 +809,25 @@ export function workoutsByDay() {
     map.get(k).push(w);
   }
   return map;
+}
+
+// =============================================================
+//  Apariencia
+// =============================================================
+
+/** Colores principales que se pueden elegir */
+export const THEMES = [
+  ['#d4ff3a', 'Lima'], ['#3ddc84', 'Menta'], ['#2dd4bf', 'Turquesa'], ['#4da3ff', 'Azul'],
+  ['#8b8cff', 'Índigo'], ['#c084fc', 'Lila'], ['#ff5f7e', 'Fresa'], ['#ff4d4d', 'Rojo'],
+  ['#ff8a3d', 'Naranja'], ['#ffd43b', 'Oro'], ['#f3f4f6', 'Blanco'],
+];
+
+/** Aplica el color principal a toda la app */
+export function applyTheme(color = state.settings.accent) {
+  if (!/^#[0-9a-f]{6}$/i.test(color || '')) color = '#d4ff3a';
+  const n = parseInt(color.slice(1), 16);
+  const root = document.documentElement.style;
+  root.setProperty('--accent', color);
+  root.setProperty('--accent-rgb', `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`);
+  try { localStorage.setItem('gymlog:accent', color); } catch { /* sin almacenamiento */ }
 }
