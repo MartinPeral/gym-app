@@ -8,7 +8,7 @@ import { MUSCLES, bodyMap, muscleList, muscleSets } from './muscles.js';
 import { askCoach, aiUrl, splitRoutine, renderMarkdown } from './coach.js';
 import { stagger, countUp, moveTabIndicator, initSwipe } from './fx.js';
 
-const APP_VERSION = '1.7';
+const APP_VERSION = '1.8';
 const VIVAGYM_APP = 'https://apps.apple.com/app/id6448747670';
 
 const app = document.getElementById('app');
@@ -152,8 +152,9 @@ const PLACE = {
   gym: { icon: '🏋️', label: 'Gimnasio' },
   home: { icon: '🏠', label: 'Casa' },
   class: { icon: '👥', label: 'Clase' },
+  sport: { icon: '🏅', label: 'Deporte' },
 };
-const PLACE_COLOR = { gym: 'var(--accent)', home: '#4da3ff', class: '#c084fc' };
+const PLACE_COLOR = { gym: 'var(--accent)', home: '#4da3ff', class: '#c084fc', sport: '#ff8a3d' };
 
 const placeTag = (p) => `<span class="place-tag ${p}">${PLACE[p].icon} ${PLACE[p].label}</span>`;
 
@@ -220,22 +221,24 @@ const routineCard = (r) => `
   </div>`;
 
 function workoutCard(w) {
-  const isClass = w.kind === 'class';
+  const isClass = S.isActivity(w);
+  const kcal = S.activityKcal(w);
   return `
   <a class="card wcard" href="#/entreno/${w.id}" style="--rc:${S.workoutColor(w)}">
     <div class="wc-top">
-      <h3>${isClass ? `<span class="tag">Clase</span>` : ''}${esc(w.name)}</h3>
+      <h3>${isClass ? `<span class="act-ico">${w.icon || PLACE[S.workoutPlace(w)].icon}</span>` : ''}${esc(w.name)}</h3>
       <span>${cap(date(w.start, { weekday: 'short', day: 'numeric', month: 'short' }))}</span>
     </div>
     <div class="wc-meta">
       ${placeTag(S.workoutPlace(w))}
       <span>${I.clock}${duration(w.end - w.start)}</span>
+      ${isClass ? `${kcal ? `<span>🔥 ~${kcal} kcal</span>` : ''}${w.intensity && w.intensity !== 'moderada' ? `<span>${S.INTENSITY[w.intensity][0]}</span>` : ''}` : ''}
       ${isClass ? '' : `
         ${S.volume(w) ? `<span>${kgShort(S.volume(w))}</span>` : ''}
         <span>${S.setCount(w)} ${S.setCount(w) === 1 ? "serie" : "series"}</span>
         ${w.prs?.length ? `<span class="pr">🏆 ${w.prs.length} PR</span>` : ''}`}
     </div>
-    ${isClass ? '' : `<p class="wc-ex">${w.exercises.map((e) => `${e.sets.length}× ${esc(e.name)}`).join(' · ')}</p>`}
+    ${isClass ? (w.note ? `<p class="wc-ex">${esc(w.note)}</p>` : '') : `<p class="wc-ex">${w.exercises.map((e) => `${e.sets.length}× ${esc(e.name)}`).join(' · ')}</p>`}
   </a>`;
 }
 
@@ -528,7 +531,7 @@ function viewHome() {
 
     <div class="quick mt">
       <button class="tile" data-action="start-empty">${I.weight}<span>Entreno libre</span></button>
-      <button class="tile" data-action="open-class">${I.people}<span>Clase colectiva</span></button>
+      <button class="tile" data-action="open-activity">${I.people}<span>Deporte o clase</span></button>
       <button class="tile" data-action="open-plates">${I.plates}<span>Discos</span></button>
     </div>
 
@@ -772,7 +775,7 @@ function calendar() {
   const todayKey = S.dayKey(now);
   const isCurrent = y === now.getFullYear() && m === now.getMonth();
 
-  const count = { gym: 0, home: 0, class: 0 };
+  const count = { gym: 0, home: 0, class: 0, sport: 0 };
   let activeDays = 0;
   let cells = '<i class="cal-empty"></i>'.repeat(offset);
   for (let d = 1; d <= days; d++) {
@@ -803,6 +806,7 @@ function calendar() {
         <div class="cal-sel">
           <h3>${title}</h3>
           ${ws.length ? `<div class="stack">${ws.map(workoutCard).join('')}</div>` : '<p class="hint" style="margin:0">Día de descanso 😴</p>'}
+          <button class="btn sm ghost block mt" data-action="open-activity" data-date="${y}-${String(m + 1).padStart(2, '0')}-${String(sd).padStart(2, '0')}">${I.plus}Añadir actividad a este día</button>
         </div>`;
     }
   }
@@ -820,6 +824,7 @@ function calendar() {
         <span><i style="background:${PLACE_COLOR.gym}"></i>Gimnasio <b>${count.gym}</b></span>
         <span><i style="background:${PLACE_COLOR.home}"></i>Casa <b>${count.home}</b></span>
         <span><i style="background:${PLACE_COLOR.class}"></i>Clases <b>${count.class}</b></span>
+        <span><i style="background:${PLACE_COLOR.sport}"></i>Deporte <b>${count.sport}</b></span>
       </div>
       <p class="cal-foot">${activeDays} ${activeDays === 1 ? 'día activo' : 'días activos'} este mes</p>
       ${selHtml}
@@ -832,7 +837,8 @@ function viewHistory() {
     return `
       <header class="top"><div><p class="eyebrow">Tu registro</p><h1>Historial</h1></div></header>
       <div class="empty">${I.dumbbell}<p>Todavía no has guardado ningún entrenamiento</p>
-      <a class="btn primary" href="#/inicio">Empezar uno</a></div>`;
+      <a class="btn primary" href="#/inicio">Empezar uno</a>
+      <button class="btn ghost" data-action="open-activity">Registrar un deporte o clase</button></div>`;
   }
   const groups = new Map();
   for (const w of workouts) {
@@ -841,7 +847,8 @@ function viewHistory() {
     groups.get(k).push(w);
   }
   return `
-    <header class="top"><div><p class="eyebrow">Tu registro</p><h1>Historial</h1></div></header>
+    <header class="top"><div><p class="eyebrow">Tu registro</p><h1>Historial</h1></div>
+      <button class="icon-btn accent" data-action="open-activity" aria-label="Añadir actividad">${I.plus}</button></header>
     ${calendar()}
     ${[...groups].map(([month, ws]) => `
       <h2 class="section-title">${month} <span class="count">${ws.length}</span></h2>
@@ -865,23 +872,25 @@ function detailSets(e) {
 function viewWorkoutDetail({ id }) {
   const w = S.state.workouts.find((x) => x.id === id);
   if (!w) { go('#/historial'); return null; }
-  const isClass = w.kind === 'class';
+  const isClass = S.isActivity(w);
   const prs = new Set((w.prs || []).map(S.norm));
+  const kcal = S.activityKcal(w);
   return `
-    ${topBar(isClass ? 'Clase' : 'Entrenamiento', { back: '#/historial' })}
+    ${topBar(w.kind === 'class' ? 'Clase' : w.kind === 'sport' ? 'Actividad' : 'Entrenamiento', { back: '#/historial' })}
     <div class="detail-head">
-      <h1>${esc(w.name)}</h1>
+      <h1>${isClass ? `<span class="act-ico big">${w.icon || '🏅'}</span>` : ''}${esc(w.name)}</h1>
       <p class="eyebrow">${esc(cap(date(w.start, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })))}</p>
-      ${isClass ? placeTag('class') : `
+      ${isClass ? placeTag(S.workoutPlace(w)) : `
         <button class="place-chip ${S.workoutPlace(w)} mt" data-action="set-place" data-id="${w.id}">
           ${PLACE[S.workoutPlace(w)].icon} ${PLACE[S.workoutPlace(w)].label}<small>Cambiar</small></button>`}
     </div>
     <div class="stats">
       ${stat(duration(w.end - w.start), 'Duración')}
       ${isClass
-        ? stat('Clase', 'Tipo') + stat(date(w.end, { hour: '2-digit', minute: '2-digit' }), 'Hora de fin')
+        ? stat(kcal ? `~${kcal}` : '—', kcal ? 'kcal estimadas' : 'kcal (registra tu peso)') + stat((S.INTENSITY[w.intensity] || S.INTENSITY.moderada)[0], 'Intensidad')
         : stat(kgShort(S.volume(w)), 'Volumen') + stat(S.setCount(w), 'Series')}
     </div>
+    ${isClass && w.note ? `<section class="card mt act-note">📝 ${esc(w.note)}</section>` : ''}
 
     ${isClass ? '' : `
     <div class="stack mt">
@@ -920,7 +929,8 @@ function musclesCard(sets, title, steps, extra = '') {
 function viewSummary({ id }) {
   const w = S.state.workouts.find((x) => x.id === id);
   if (!w) { go('#/historial'); return null; }
-  const isClass = w.kind === 'class';
+  const isClass = S.isActivity(w);
+  const kcal = S.activityKcal(w);
   const prs = w.prDetails || (w.prs || []).map((name) => ({ name }));
   const goal = S.state.settings.weeklyGoal;
   const count = S.weekWorkouts().length;
@@ -928,13 +938,13 @@ function viewSummary({ id }) {
 
   return `
     <div class="summary" style="--rc:${S.workoutColor(w)}">
-      <div class="badge">${prs.length ? '🏆' : reached ? '🎯' : '💪'}</div>
+      <div class="badge">${prs.length ? '🏆' : isClass ? (w.icon || '🏅') : reached ? '🎯' : '💪'}</div>
       <h1>${prs.length ? '¡Nuevo récord!' : '¡Buen trabajo!'}</h1>
       <p class="sub">Has completado <b>${esc(w.name)}</b></p>
       <div class="big-stats">
         ${stat(duration(w.end - w.start), 'Duración')}
         ${isClass
-          ? stat('Clase', 'Colectiva')
+          ? stat(kcal ? `~${kcal}` : '—', 'kcal estimadas')
           : stat(kgShort(S.volume(w)), 'Volumen') + stat(S.setCount(w), 'Series') + stat(prs.length, 'Récords')}
       </div>
     </div>
@@ -1653,33 +1663,73 @@ function renderPickerList(q) {
     (!list.length && !term ? '<p class="hint">No hay ejercicios</p>' : '');
 }
 
-// --- Registrar clase colectiva ---
+// --- Registrar deporte o clase ---
 
-let classForm = null;
+let actForm = null;
 
-function openClassSheet() {
-  classForm = { name: S.CLASSES[0], min: 45 };
+const fmtMin = (m) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`);
+const hhmm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+function actChips() {
+  const list = actForm.kind === 'sport'
+    ? S.SPORTS.map(([n, ic]) => [n, ic])
+    : S.CLASSES.map((n) => [n, '👥']);
+  return list.map(([n, ic]) => `<button class="chip ${n === actForm.name ? 'on' : ''}" data-action="act-pick" data-name="${esc(n)}">${ic} ${esc(n)}</button>`).join('');
+}
+
+function actSyncDur() {
+  document.getElementById('act-min').textContent = fmtMin(actForm.min);
+  overlay.querySelectorAll('#act-quick .chip').forEach((c) => c.classList.toggle('on', Number(c.dataset.m) === actForm.min));
+}
+
+function openActivitySheet(day) {
+  const now = new Date();
+  const today = S.ymd(now);
+  const past = day && day < today;
+  actForm = { kind: 'sport', name: S.SPORTS[0][0], min: 60, intensity: 'moderada' };
   openOverlay(`
-    <div class="sheet short" role="dialog" aria-modal="true" aria-label="Registrar clase">
-      ${sheetHead('Registrar clase')}
-      <p class="hint" style="margin-top:0">Apunta una clase colectiva que acabas de terminar para que cuente en tu semana.</p>
-      <div class="field mt">
-        <span>Clase</span>
-        <div class="chips" id="class-types">
-          ${S.CLASSES.map((c, i) => `<button class="chip ${i === 0 ? 'on' : ''}" data-action="class-type" data-name="${esc(c)}">${esc(c)}</button>`).join('')}
-        </div>
+    <div class="sheet short" role="dialog" aria-modal="true" aria-label="Registrar actividad">
+      ${sheetHead('Registrar actividad')}
+      <div class="seg" id="act-kind">
+        <button class="on" data-action="act-kind" data-k="sport">🏅 Deporte</button>
+        <button data-action="act-kind" data-k="class">👥 Clase del gym</button>
       </div>
+      <div class="chips mt" id="act-chips">${actChips()}</div>
       <label class="field mt">
         <span>¿Otra? Escribe el nombre</span>
-        <input id="class-other" class="input" placeholder="Nombre de la clase" maxlength="40" autocomplete="off">
+        <input id="act-other" class="input" placeholder="Ej. Partido de rugby" maxlength="40" autocomplete="off">
       </label>
+
       <div class="field mt">
         <span>Duración</span>
-        <div class="seg" id="class-dur">
-          ${[30, 45, 50, 60, 75].map((m) => `<button class="${m === 45 ? 'on' : ''}" data-action="class-dur" data-min="${m}">${m}′</button>`).join('')}
+        <div class="act-dur">
+          <button class="icon-btn" data-action="act-step" data-d="-5" aria-label="Menos 5 minutos">−</button>
+          <strong id="act-min">${fmtMin(actForm.min)}</strong>
+          <button class="icon-btn" data-action="act-step" data-d="5" aria-label="Más 5 minutos">+</button>
+        </div>
+        <div class="chips act-quick" id="act-quick">
+          ${[30, 45, 60, 75, 90, 120].map((m) => `<button class="chip ${m === actForm.min ? 'on' : ''}" data-action="act-dur" data-m="${m}">${fmtMin(m)}</button>`).join('')}
         </div>
       </div>
-      <button class="btn primary block mt" data-action="save-class">Guardar clase</button>
+
+      <div class="form-grid mt">
+        <label class="field"><span>Día</span>
+          <input id="act-date" class="input" type="date" value="${day || today}" max="${today}"></label>
+        <label class="field"><span>Terminó a las</span>
+          <input id="act-end" class="input" type="time" value="${past ? '20:00' : hhmm(now)}"></label>
+      </div>
+
+      <div class="field mt">
+        <span>Intensidad</span>
+        <div class="seg" id="act-int">
+          ${Object.entries(S.INTENSITY).map(([k, [l]]) => `<button class="${k === actForm.intensity ? 'on' : ''}" data-action="act-int" data-i="${k}">${l}</button>`).join('')}
+        </div>
+      </div>
+
+      <label class="field mt"><span>Nota <em>opcional</em></span>
+        <input id="act-note" class="input" placeholder="Ej. Partido con los de clase, ganamos 5-3" maxlength="120" autocomplete="off"></label>
+
+      <button class="btn primary block mt" data-action="save-activity">Guardar actividad</button>
     </div>`, 'bottom');
 }
 
@@ -1989,20 +2039,48 @@ const actions = {
     go('#/inicio');
   },
 
-  // --- Clase colectiva ---
-  'open-class': () => openClassSheet(),
-  'class-type': (el) => {
-    classForm.name = el.dataset.name;
-    overlay.querySelectorAll('#class-types .chip').forEach((c) => c.classList.toggle('on', c === el));
-    document.getElementById('class-other').value = '';
+  // --- Deporte o clase ---
+  'open-activity': (el) => openActivitySheet(el.dataset.date),
+  'act-kind': (el) => {
+    actForm.kind = el.dataset.k;
+    actForm.name = actForm.kind === 'sport' ? S.SPORTS[0][0] : S.CLASSES[0];
+    if (actForm.kind === 'class' && actForm.min > 75) actForm.min = 45;
+    overlay.querySelectorAll('#act-kind button').forEach((b) => b.classList.toggle('on', b === el));
+    document.getElementById('act-chips').innerHTML = actChips();
+    document.getElementById('act-other').value = '';
+    document.getElementById('act-other').placeholder = actForm.kind === 'sport' ? 'Ej. Partido de rugby' : 'Ej. Body pump';
+    actSyncDur();
   },
-  'class-dur': (el) => {
-    classForm.min = +el.dataset.min;
-    overlay.querySelectorAll('#class-dur button').forEach((b) => b.classList.toggle('on', b === el));
+  'act-pick': (el) => {
+    actForm.name = el.dataset.name;
+    document.getElementById('act-other').value = '';
+    overlay.querySelectorAll('#act-chips .chip').forEach((c) => c.classList.toggle('on', c === el));
   },
-  'save-class': () => {
-    const other = document.getElementById('class-other').value.trim();
-    const w = S.logClass(other || classForm.name, classForm.min);
+  'act-step': (el) => { actForm.min = Math.min(600, Math.max(5, actForm.min + Number(el.dataset.d))); actSyncDur(); },
+  'act-dur': (el) => { actForm.min = Number(el.dataset.m); actSyncDur(); },
+  'act-int': (el) => {
+    actForm.intensity = el.dataset.i;
+    overlay.querySelectorAll('#act-int button').forEach((b) => b.classList.toggle('on', b === el));
+  },
+  'save-activity': () => {
+    const other = document.getElementById('act-other').value.trim();
+    const day = document.getElementById('act-date').value || S.ymd();
+    const endTime = document.getElementById('act-end').value || hhmm(new Date());
+    const end = new Date(`${day}T${endTime}:00`).getTime();
+    if (!Number.isFinite(end)) return toast('Revisa el día y la hora');
+    if (end > Date.now() + 60000) return toast('La actividad no puede terminar en el futuro');
+    const name = other || actForm.name;
+    const sport = S.SPORTS.find(([n]) => S.norm(n) === S.norm(name));
+    const w = S.logActivity({
+      kind: actForm.kind,
+      name,
+      icon: actForm.kind === 'class' ? '👥' : sport?.[1] || '🏅',
+      met: actForm.kind === 'class' ? S.CLASS_MET : sport?.[2] || 6,
+      minutes: actForm.min,
+      end,
+      intensity: actForm.intensity,
+      note: document.getElementById('act-note').value.trim(),
+    });
     closeOverlay();
     celebrate = w.id;
     go('#/resumen/' + w.id);
@@ -2322,8 +2400,8 @@ document.addEventListener('input', (e) => {
     return;
   }
   if (t.id === 'plate-kg') return renderPlates();
-  if (t.id === 'class-other') {
-    overlay.querySelectorAll('#class-types .chip').forEach((c) => c.classList.toggle('on', !t.value.trim() && c.dataset.name === classForm.name));
+  if (t.id === 'act-other') {
+    overlay.querySelectorAll('#act-chips .chip').forEach((c) => c.classList.toggle('on', !t.value.trim() && c.dataset.name === actForm.name));
     return;
   }
 

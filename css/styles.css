@@ -985,3 +985,15 @@ html.theme-anim *, html.theme-anim *::before, html.theme-anim *::after {
 @keyframes sp-out { to { opacity: 0; transform: scale(1.12); filter: blur(6px); } }
 
 @media (prefers-reduced-motion: reduce) { #splash { display: none; } }
+
+/* ---------- v1.8: deportes y actividades ---------- */
+.place-tag.sport { background: rgba(255, 138, 61, .15); color: #ff8a3d; }
+.act-ico { margin-right: 6px; }
+.act-ico.big { font-size: 26px; vertical-align: -2px; margin-right: 8px; }
+.act-dur { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--surface-2); border-radius: 16px; padding: 8px; }
+.act-dur .icon-btn { width: 48px; height: 48px; font-size: 24px; font-weight: 600; background: var(--surface-3); }
+.act-dur strong { font-size: 30px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.act-quick { margin-top: 10px; }
+.act-quick .chip { height: 34px; padding: 0 12px; font-size: 13px; }
+.act-note { font-size: 15px; line-height: 1.45; }
+#act-chips .chip { height: 38px; }

@@ -50,6 +50,16 @@ export const ALL_PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];
 /** Colores para las rutinas */
 export const PALETTE = ['#ff8a3d', '#4da3ff', '#3ddc84', '#d4ff3a', '#c084fc', '#ff5f7e', '#ffd43b', '#2dd4bf'];
 const CLASS_COLOR = '#c084fc';
+const SPORT_COLOR = '#ff8a3d';
+
+/** Deportes para registrar como actividad (MET aproximado para estimar kcal) */
+export const SPORTS = [
+  ['Fútbol', '⚽', 7], ['Fútbol sala', '⚽', 8], ['Pádel', '🎾', 6], ['Tenis', '🎾', 7.3],
+  ['Baloncesto', '🏀', 6.5], ['Correr', '🏃', 9.8], ['Ciclismo', '🚴', 7.5], ['Natación', '🏊', 7],
+  ['Senderismo', '🥾', 6], ['Boxeo', '🥊', 7.8], ['Escalada', '🧗', 8], ['Voleibol', '🏐', 4],
+];
+export const CLASS_MET = 5;
+export const INTENSITY = { suave: ['Suave', 0.8], moderada: ['Moderada', 1], intensa: ['Intensa', 1.25] };
 const FREE_COLOR = 'var(--accent)';
 
 export const routineColor = (r) =>
@@ -59,6 +69,7 @@ export const routineColor = (r) =>
 export function workoutColor(w) {
   if (!w) return FREE_COLOR;
   if (w.kind === 'class') return CLASS_COLOR;
+  if (w.kind === 'sport') return SPORT_COLOR;
   const r = state.routines.find((x) => x.id === w.routineId);
   return r ? routineColor(r) : FREE_COLOR;
 }
@@ -517,6 +528,44 @@ export function finishWorkout() {
   return workout;
 }
 
+/** Clases del gym y deportes: se guardan sin ejercicios */
+export const isActivity = (w) => w?.kind === 'class' || w?.kind === 'sport';
+
+/**
+ * Registra una actividad (deporte o clase) ya terminada.
+ * a = { kind: 'sport'|'class', name, icon, met, minutes, end, intensity, note }
+ */
+export function logActivity(a) {
+  const end = a.end || Date.now();
+  const w = {
+    id: uid(),
+    kind: a.kind,
+    place: a.kind === 'class' ? 'gym' : 'out',
+    name: a.name,
+    icon: a.icon || (a.kind === 'class' ? '👥' : '🏅'),
+    met: a.met || (a.kind === 'class' ? CLASS_MET : 6),
+    intensity: a.intensity || 'moderada',
+    ...(a.note ? { note: a.note } : {}),
+    start: end - a.minutes * 60000,
+    end,
+    exercises: [],
+    prs: [],
+  };
+  state.workouts.push(w);
+  state.workouts.sort((x, y) => y.start - x.start);
+  save();
+  return w;
+}
+
+/** Calorías estimadas de una actividad (necesita tener algún peso registrado) */
+export function activityKcal(w) {
+  if (!isActivity(w)) return null;
+  const kg = weightTrend().at(-1)?.trend;
+  if (!kg) return null;
+  const mult = (INTENSITY[w.intensity] || INTENSITY.moderada)[1];
+  return Math.round(((w.met || 6) * mult * kg * (w.end - w.start)) / 3600000 / 5) * 5;
+}
+
 /** Registra una clase colectiva que acaba de terminar */
 export function logClass(name, minutes) {
   const end = Date.now();
@@ -766,7 +815,7 @@ export function bodyStats() {
 // =============================================================
 
 /** 'gym' | 'home' | 'class' */
-export const workoutPlace = (w) => (w.kind === 'class' ? 'class' : w.place || 'gym');
+export const workoutPlace = (w) => (w.kind === 'class' ? 'class' : w.kind === 'sport' ? 'sport' : w.place || 'gym');
 
 export function setWorkoutPlace(id, place) {
   const w = state.workouts.find((x) => x.id === id);

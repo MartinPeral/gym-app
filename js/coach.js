@@ -14,7 +14,7 @@ export const aiUrl = () => (S.state.settings.aiUrl || DEFAULT_AI_URL).trim();
 const n1 = (v) => Number(v).toLocaleString('es-ES', { maximumFractionDigits: 1 });
 const fdate = (t, o = { weekday: 'short', day: 'numeric', month: 'short' }) =>
   new Intl.DateTimeFormat('es-ES', o).format(new Date(t));
-const PLACE = { gym: 'gimnasio', home: 'casa', class: 'clase' };
+const PLACE = { gym: 'gimnasio', home: 'casa', class: 'clase', sport: 'deporte' };
 
 function setText(name, s) {
   if (S.exerciseType(name) === 'cardio') return `${n1(s.min)} min${s.km ? ` ${n1(s.km)} km` : ''}`;
@@ -83,7 +83,7 @@ export function buildContext() {
     recent.forEach((w) => {
       const mins = Math.round((w.end - w.start) / 60000);
       const ex = w.exercises.map((e) => `${e.name} ${e.sets.map((s) => setText(e.name, s)).join(', ')}`).join('; ');
-      lines.push(`- ${fdate(w.start)}: ${w.name} (${PLACE[S.workoutPlace(w)]}, ${mins} min)${ex ? `: ${ex}` : ''}${w.prs?.length ? ` [récord en ${w.prs.join(', ')}]` : ''}`);
+      lines.push(`- ${fdate(w.start)}: ${w.name} (${PLACE[S.workoutPlace(w)]}, ${mins} min${w.intensity && S.isActivity(w) ? `, intensidad ${w.intensity}` : ''}${w.note ? `, nota: ${w.note}` : ''})${ex ? `: ${ex}` : ''}${w.prs?.length ? ` [récord en ${w.prs.join(', ')}]` : ''}`);
     });
   } else {
     lines.push('ÚLTIMOS ENTRENOS: ninguno registrado todavía.');
